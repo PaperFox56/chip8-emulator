@@ -1,3 +1,7 @@
+/**
+ * cpu.h
+ */
+
 #ifndef CHIP8_CPU_H
 #define CHIP8_CPU_H
 
@@ -10,9 +14,20 @@ extern "C" {
 #define STACK_SIZE 16
 #define RAM_SIZE 0x1000
 
+#define SCREEN_WIDTH 64
+#define SCREEN_HEIGHT 32
+#define SCREEN_PIXEL_COUNT SCREEN_WIDTH *SCREEN_HEIGHT
+
+/*
+ * This structure represent's the machine as a whole.
+ * This allows the debugger to access any data at any time.
+ * I also makes the emulator's core independant from any external environment.
+ * That means that the same code can be reused with a different display and
+ * input system.
+ */
 typedef struct {
   // general registers
-  uint8_t V[0xF];
+  uint8_t V[16];
 
   // stack pointer
   uint8_t SP;
@@ -27,11 +42,17 @@ typedef struct {
 
   uint16_t stack[STACK_SIZE];
   uint8_t RAM[RAM_SIZE];
-} CPU;
 
-void CPU_init(CPU *cpu);
+  uint8_t framebuffer[SCREEN_PIXEL_COUNT];
+} Chip8;
 
-uint8_t get_random_number();
+void Chip8_init(Chip8 *machine);
+
+/*
+ * Execute the instruction pointed to by the PC register and update the
+ * machine's state;
+ */
+void Chip8_step_through(Chip8 *machine);
 
 #ifdef __cplusplus
 }
