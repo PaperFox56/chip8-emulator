@@ -1,33 +1,43 @@
 #include "timer.h"
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <windows.h>
-#endif
-#if _POSIX_C_SOURCE >= 199309L
-#include <time.h>
-#endif
+#else
 
+#define _POSIX_C_SOURCE 199309L
+
+#include <sys/time.h>
+#include <time.h>
+#include <unistd.h>
+#endif
 
 long currentTimeMillis() {
-	struct timeval time;
-	gettimeofday(&time, 0);
-	long s1 = (long)(time.tv_sec) * 1000;
-	long s2 = (time.tv_usec / 1000);
-	return s1 + s2;
+#ifdef _WIN32
+  // Windows Monotonic Timer
+  LARGE_INTEGER freq, count;
+  QueryPerformanceFrequency(&freq);
+  QueryPerformanceCounter(&count);
+  return (long)((count.QuadPart * 1000) / freq.QuadPart);
+#elif defined(_POSIX_TIMERS) && _POSIX_TIMERS > 0
+  // POSIX Monotonic Timer (Preferred)
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (long)ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
+#else
+  // Fallback to Wall-clock (Legacy POSIX)
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (long)tv.tv_sec * 1000 + (tv.tv_usec / 1000);
+#endif
 }
 
-
-void sleep_ms(int milliseconds){
-	#ifdef WIN32
-	Sleep(milliseconds);
-	#elif _POSIX_C_SOURCE >= 199309L
-	struct timespec ts;
-	ts.tv_sec = milliseconds / 1000;
-	ts.tv_nsec = (milliseconds % 1000) * 1000000;
-	nanosleep(&ts, 0);
-	#else
-	if (milliseconds >= 1000)
-		sleep(milliseconds / 1000);
-	usleep((milliseconds % 1000) * 1000);
-	#endif
+void sleep_ms(int milliseconds) {
+#ifdef _WIN32
+  Sleep(milliseconds);
+#elif _POSIX_C_SOURCE >= 199309L
+  struct timespec ts = {milliseconds / 1000, (milliseconds % 1000) * 1000000};
+  nanosleep(&ts, NULL);
+#else
+  usleep(milliseconds * 1000);
+#endif
 }

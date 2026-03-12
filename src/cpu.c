@@ -28,25 +28,42 @@ static const uint8_t sprite[] = {
 
 static uint8_t get_random_number() { return rand() % 256; }
 
-static void draw_sprite(Chip8 *machine, uint8_t x, uint8_t y, uint8_t n) {
+// Rotate 64-bit integer right by 'n' bits
+uint64_t rotate_right(uint64_t x, unsigned int n) {
+  const uint32_t mask = (8 * sizeof(x)) - 1;
+  n &= mask; // Ensure n is in the range [0, 63]
+  if (n == 0)
+    return x;
+  return (x << n) | (x >> ((-n) & mask));
+}
 
-  machine->V[0xF] = 1;
+static void draw_sprite(Chip8 *machine, uint8_t x, uint8_t y, uint8_t n) {
+  // Reset collision flag
+  machine->V[0xF] = 0;
+
+  // X and Y coordinates wrap according to modern Chip-8 specifications
+  uint8_t start_x = machine->V[x] % SCREEN_WIDTH;
+  uint8_t start_y = machine->V[y] % SCREEN_HEIGHT;
 
   for (int i = 0; i < n; i++) {
-    uint8_t row = machine->RAM[machine->I + i];
-    int pos_y = (y + i) % SCREEN_HEIGHT;
-    int base_index = SCREEN_WIDTH * pos_y;
-    for (int j = 0; j < 8; j++) {
-      int pos_x = (x + j) % SCREEN_WIDTH;
-      int pixel = (row >> (8 - j)) & 1;
+    int pos_y = (start_y + i);
+    // Stop drawing if we hit the bottom of the screen
+    if (pos_y >= SCREEN_HEIGHT)
+      break;
 
-      if (pixel == 1) {
-        if (machine->framebuffer[pos_x + base_index] == 1)
-          machine->V[0xF] = 1;
+    // Load 8-bit sprite data into the high bits of a 64-bit word
+    uint64_t sprite_row = (uint64_t)machine->RAM[machine->I + i] << 56;
 
-        machine->framebuffer[pos_x + base_index] ^= pixel;
-      }
+    // Shift sprite to the correct horizontal position
+    sprite_row >>= start_x;
+
+    uint64_t screen_row = machine->framebuffer[pos_y];
+
+    if (sprite_row & screen_row) {
+      machine->V[0xF] = 1;
     }
+
+    machine->framebuffer[pos_y] = sprite_row ^ screen_row;
   }
 }
 
@@ -67,7 +84,9 @@ void Chip8_init(Chip8 *machine) {
   // The stack holds 16 bits values (2 bytes)
   memset(machine->stack, 0, STACK_SIZE * 2);
   memset(machine->RAM, 0, RAM_SIZE);
-  memset(machine->framebuffer, 1, SCREEN_PIXEL_COUNT);
+  memset(machine->framebuffer, 0, SCREEN_HEIGHT);
+  memset(machine->keyboard, 0, 16);
+  memset(machine->key_released, 0, 16);
 
   // Load the sprites at the right address
   memcpy(machine->RAM, sprite, sizeof(sprite));
@@ -80,24 +99,26 @@ void Chip8_step_through(Chip8 *machine) {
 
   uint16_t opcode = (opcode_high << 8) + opcode_low;
 
-  int group = opcode >> 12; // 0xCxxx -> 0xC
+  int group = opcode_high >> 4; // 0xCxxx -> 0xC
 
   int X = opcode_high & 0xF; // first argument in register operations
   int Y = opcode_low >> 4;   // first argument in register operations
+
+  machine->PC += 2;
 
 #define address (opcode & 0x0FFF)
 
   switch (group) {
   case 0x0: {
-    if (opcode == 0x00E0) { // CLS - clear the screen
-      memset(machine->framebuffer, 1, SCREEN_PIXEL_COUNT);
+    if (opcode_low == 0x00E0) { // CLS - clear the screen
+      memset(machine->framebuffer, 0, SCREEN_HEIGHT * sizeof(uint64_t));
     } else if (opcode == 0x00EE) { // RET - return from subroutine
       machine->PC = machine->stack[machine->SP--];
     }
   } break;
   case 0x2: // FALLTHROUGH
             // CALL addr
-    machine->stack[++machine->SP] = machine->PC;
+    machine->stack[++machine->SP] = machine->PC + 2;
   case 0x1: // JP addr
     machine->PC = address;
     break;
@@ -144,14 +165,78 @@ void Chip8_step_through(Chip8 *machine) {
     machine->V[X] = get_random_number() & opcode_low;
     break;
   case 0xD: // DRW VX, VY, n
-    draw_sprite(machine, machine->V[X], machine->V[Y], opcode_low & 0xF);
-  default:
+    draw_sprite(machine, X, Y, opcode_low & 0xF);
     break;
+  case 0xE: {
+    if (machine->V[X] > 0xF)
+      break;
+
+    if ((opcode_low & 0x9E) == 0) { // SKP Vx
+      if (machine->keyboard[machine->V[X]] != 0)
+        machine->PC += 2;
+    } else if ((opcode_low & 0xA1) == 0) { // SKNP Vx
+      if (machine->keyboard[machine->V[X]] == 0)
+        machine->PC += 2;
+    }
+  } break;
+  case 0xF:
+    switch (opcode_low) {
+    case 0x07: // LD VX, DT
+      machine->V[X] = machine->DT;
+      break;
+    case 0x0A: { // LD VX, K
+      int found = 0;
+      for (int i = 0; i < 16; i++) {
+        if (machine->key_released[i] != 0) {
+          machine->V[X] = i;
+          found = 1;
+          break;
+        }
+      }
+
+      if (!found) {
+        machine->PC -= 2;
+      }
+    } break;
+      ;
+    case 0x15: // LD DT, VX
+      machine->DT = machine->V[X];
+      break;
+      ;
+    case 0x18: // LD ST, VX
+      machine->ST = machine->V[X];
+      break;
+    case 0x1E: // ADD I, VX
+      machine->I += machine->V[X];
+      break;
+    case 0x29: // LD F, VX
+      machine->I = machine->V[X] * 0x05;
+      break;
+    case 0x33: { // LD B, VX
+                 // get hundreds, tens and ones
+      uint8_t h = machine->V[X] / 100;
+      uint8_t t = (machine->V[X] - h * 100) / 10;
+      uint8_t o = machine->V[X] - h * 100 - t * 10;
+      machine->RAM[machine->I] = h;
+      machine->RAM[machine->I + 1] = t;
+      machine->RAM[machine->I + 2] = o;
+    } break;
+    case 0x55: // LD [I], VX
+      for (int i = 0; i <= X; i++) {
+        machine->RAM[machine->I + i] = machine->V[i];
+      }
+      break;
+    case 0x65: // LD VX, [I]
+      for (int i = 0; i <= X; i++) {
+        machine->V[i] = machine->RAM[machine->I + i];
+      }
+      break;
+    default:
+      break;
+    }
   }
 
 #undef address
-  machine->PC += 2;
 
-  machine->PC &= 0x0FFF; // make sure that only the 12 right bits are used
-  machine->SP &= 0x0F;   // same here
+  machine->SP &= 0x0F; // same here
 }

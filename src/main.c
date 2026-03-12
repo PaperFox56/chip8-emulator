@@ -1,10 +1,12 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include <teye/teye.h>
 
 #include "cpu.h"
+#include "timer.h"
 
 #define min(a, b) (a < b ? a : b)
 
@@ -30,20 +32,40 @@ int main() {
     perror("Couldn't load the test ROM");
   }
 
-  // There is no way this is gonna backfire right ?
-  // Anyways, don't call any memory management function on this buffer.
-  TEYE_Buffer framebuffer = {SCREEN_WIDTH, SCREEN_HEIGHT, machine->framebuffer,
-                             SCREEN_PIXEL_COUNT};
+  TEYE_Buffer framebuffer = {0};
+  TEYE_allocate_buffer(&framebuffer, SCREEN_WIDTH, SCREEN_WIDTH);
+
+  time_t previous_frame = currentTimeMillis();
+  time_t frame_rate = 60;
+  time_t cpu_frequency = 500;
 
   while (running) {
-    Chip8_step_through(machine);
+
+    for (int i = 0; i < cpu_frequency / frame_rate; i++) {
+      Chip8_step_through(machine);
+    }
+
+    // We need to convert the chip8's framebuffer to a proper TEYE buffer
+    for (int i = 0; i < SCREEN_HEIGHT; i++) {
+      for (int j = 0; j < SCREEN_WIDTH; j++) {
+        framebuffer.buffer[i * SCREEN_WIDTH + j] =
+            (machine->framebuffer[i] >> (63 - j)) & 1;
+      }
+    }
 
     TEYE_blit(framebuffer, FitWidth, 0, 0, 1, 1);
     TEYE_render_frame();
+
+    time_t current = currentTimeMillis();
+    time_t delta_time = current - previous_frame;
+    previous_frame = current;
+
+    sleep_ms(1000 / frame_rate - delta_time);
+
+    printf("%ld", delta_time);
   }
 
-  printf("Come on, do something!");
-
+  TEYE_free_buffer(&framebuffer);
   free(machine);
 
   return 0;

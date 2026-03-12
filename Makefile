@@ -3,7 +3,8 @@ This makefile require GNU Make
 endif
 
 CC=gcc
-CFLAGS= -Wall -Wextra -pedantic -std=c99 -fsanitize=address
+CFLAGS := -Wall -Wextra -pedantic -std=c99 -fsanitize=address
+CFLAGS +=
 
 TARGET=chip8emu
 SRCS    := $(wildcard src/*.c)
