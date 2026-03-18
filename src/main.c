@@ -6,7 +6,11 @@
 #include <teye/teye.h>
 
 #include "cpu.h"
+#include "display.h"
 #include "timer.h"
+
+#define BLACK 232
+#define WHITE 231
 
 #define min(a, b) (a < b ? a : b)
 
@@ -49,11 +53,12 @@ int main() {
     for (int i = 0; i < SCREEN_HEIGHT; i++) {
       for (int j = 0; j < SCREEN_WIDTH; j++) {
         framebuffer.buffer[i * SCREEN_WIDTH + j] =
-            (machine->framebuffer[i] >> (63 - j)) & 1;
+            ((machine->framebuffer[i] >> (63 - j)) & 1) ? WHITE : BLACK;
       }
     }
 
-    TEYE_blit(framebuffer, FitWidth, 0, 0, 1, 1);
+    TEYE_clear_buffer(TEYE_get_framebuffer(0), 0);
+    TEYE_blit(framebuffer, FitWidth, 0, 0);
     TEYE_render_frame();
 
     time_t current = currentTimeMillis();
