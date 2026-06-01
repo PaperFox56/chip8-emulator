@@ -9,9 +9,6 @@
 #include "display.h"
 #include "timer.h"
 
-#define BLACK 232
-#define WHITE 231
-
 #define min(a, b) (a < b ? a : b)
 
 volatile int running = 1;
@@ -24,8 +21,10 @@ int main() {
 
   signal(SIGINT, signal_handler);
 
-  TEYE_init();
-  atexit(TEYE_free);
+  if (Display_init() != 0) {
+    perror("Couldn't initialise the display library");
+    exit(EXIT_FAILURE);
+  }
 
   Chip8 *machine = (Chip8 *)malloc(sizeof(Chip8));
   Chip8_init(machine);
@@ -35,9 +34,6 @@ int main() {
     running = 0;
     perror("Couldn't load the test ROM");
   }
-
-  TEYE_Buffer framebuffer = {0};
-  TEYE_allocate_buffer(&framebuffer, SCREEN_WIDTH, SCREEN_WIDTH);
 
   time_t previous_frame = currentTimeMillis();
   time_t frame_rate = 60;
@@ -49,17 +45,8 @@ int main() {
       Chip8_step_through(machine);
     }
 
-    // We need to convert the chip8's framebuffer to a proper TEYE buffer
-    for (int i = 0; i < SCREEN_HEIGHT; i++) {
-      for (int j = 0; j < SCREEN_WIDTH; j++) {
-        framebuffer.buffer[i * SCREEN_WIDTH + j] =
-            ((machine->framebuffer[i] >> (63 - j)) & 1) ? WHITE : BLACK;
-      }
-    }
-
-    TEYE_clear_buffer(TEYE_get_framebuffer(0), 0);
-    TEYE_blit(framebuffer, FitWidth, 0, 0);
-    TEYE_render_frame();
+    Display_update(machine);
+    Display_render();
 
     time_t current = currentTimeMillis();
     time_t delta_time = current - previous_frame;
@@ -70,10 +57,9 @@ int main() {
     printf("%ld", delta_time);
   }
 
-  TEYE_free_buffer(&framebuffer);
   free(machine);
 
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 int loadROM(uint8_t *mem, int start, int size, const char *path) {

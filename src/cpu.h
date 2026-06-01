@@ -43,10 +43,10 @@ typedef struct {
   uint16_t stack[STACK_SIZE];
   uint8_t RAM[RAM_SIZE];
 
-  uint8_t framebuffer[SCREEN_PIXEL_COUNT];
-  uint8_t keyboard[16];     // state of the keyboard
-  uint8_t key_released[16]; // detect falling edges for key presses
-
+  // Each row of the screen can be represented by a single 64 integer.
+  uint64_t framebuffer[SCREEN_HEIGHT];
+  uint8_t key_released[16];
+  uint8_t keyboard[16];
 } Chip8;
 
 void Chip8_init(Chip8 *machine);

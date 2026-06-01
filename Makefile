@@ -4,7 +4,7 @@ endif
 
 CC=gcc
 CFLAGS := -Wall -Wextra -pedantic -std=c99 -fsanitize=address
-CFLAGS +=
+CFLAGS += -g	
 
 TARGET=chip8emu
 SRCS    := $(wildcard src/*.c)

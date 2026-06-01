@@ -7,7 +7,6 @@
 typedef void (*arithmeticFunction)(uint8_t *, uint8_t *, uint8_t *);
 extern arithmeticFunction arithmetic_functions[];
 
-
 // the sprites for hexadecimal digits.S
 static const uint8_t sprite[] = {
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -29,15 +28,6 @@ static const uint8_t sprite[] = {
 };
 
 static uint8_t get_random_number() { return rand() % 256; }
-
-// Rotate 64-bit integer right by 'n' bits
-uint64_t rotate_right(uint64_t x, unsigned int n) {
-  const uint32_t mask = (8 * sizeof(x)) - 1;
-  n &= mask; // Ensure n is in the range [0, 63]
-  if (n == 0)
-    return x;
-  return (x << n) | (x >> ((-n) & mask));
-}
 
 static void draw_sprite(Chip8 *machine, uint8_t x, uint8_t y, uint8_t n) {
   // Reset collision flag
