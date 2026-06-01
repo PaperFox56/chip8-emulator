@@ -1,10 +1,12 @@
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 #include <teye/teye.h>
 
+#include "common.h"
 #include "cpu.h"
 #include "display.h"
 #include "timer.h"
@@ -15,22 +17,21 @@ volatile int running = 1;
 
 void signal_handler() { running = 0; }
 
-int loadROM(uint8_t *mem, int start, int size, const char *path);
-
 int main() {
 
   signal(SIGINT, signal_handler);
 
   if (Display_init() != 0) {
-    perror("Couldn't initialise the display library");
+    fprintf(stderr, "Couldn't initialise the display library");
     exit(EXIT_FAILURE);
   }
 
   Chip8 *machine = (Chip8 *)malloc(sizeof(Chip8));
   Chip8_init(machine);
 
-  if (loadROM(machine->RAM + 0x200, 0, RAM_SIZE - 0x200,
-              "testROMs/test_opcode.ch8") != EXIT_SUCCESS) {
+  if (load_ROM_from_file_path(machine->RAM + 0x200, 0,
+                              (unsigned int)(RAM_SIZE - 0x200),
+                              "testROMs/test_opcode.ch8") != EXIT_SUCCESS) {
     running = 0;
     perror("Couldn't load the test ROM");
   }
@@ -62,26 +63,55 @@ int main() {
   return EXIT_SUCCESS;
 }
 
-int loadROM(uint8_t *mem, int start, int size, const char *path) {
-  // open the file in read binary mode
-  FILE *file = fopen(path, "rb");
-
-  if (file == NULL) {
-    printf("Error: Couldn't open ROM file <%s>\n", path);
-    return EXIT_FAILURE; // Indicate an error
-  }
+int load_ROM_from_file_descriptor(uint8_t *mem, unsigned int start,
+                                  unsigned int size, FILE *file) {
 
   fseek(file, 0, SEEK_END); // Move the file pointer to the end of the file
   long length =
       ftell(file); // Get the current position (which is the file's size)
   rewind(file);
 
-  if (length > start) {
-    fseek(file, start, 0);
-    fread(mem, 1, min(length - 1, size), file);
+  if (length <= start) {
+    // Nothing to read
+    return EXIT_SUCCESS;
   }
 
-  fclose(file);
+  unsigned int to_read = length - start;
 
-  return EXIT_SUCCESS;
+  if (to_read > size) {
+    // Buffer overflow
+    fprintf(stderr, "load_ROM_from_file_descriptor: Buffer size is less than "
+                    "data length\n");
+    return EXIT_FAILURE;
+  } else {
+
+    fseek(file, start, 0);
+    fread(mem, 1, to_read, file);
+
+    return EXIT_SUCCESS;
+  }
+}
+
+int load_ROM_from_file_path(uint8_t *mem, unsigned int start, unsigned int size,
+                            const char *path) {
+  // open the file in read binary mode
+  FILE *file = fopen(path, "rb");
+
+  if (file == NULL) {
+    char message[512];
+    snprintf(message, sizeof(message),
+             "load_ROM_from_file_path: Couldn't open ROM file <%s>\n", path);
+    perror(message);
+    return EXIT_FAILURE;
+  }
+
+  if (load_ROM_from_file_descriptor(mem, start, size, file) == EXIT_FAILURE) {
+    fprintf(stderr,
+            "load_ROM_from_file_path: Error while loading the file's data\n");
+    fclose(file);
+    return EXIT_FAILURE;
+  } else {
+    fclose(file);
+    return EXIT_SUCCESS;
+  }
 }
