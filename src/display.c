@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <teye/teye.h>
 #include <unistd.h>
@@ -66,8 +67,11 @@ void Display_render() {
 
   TEYE_Buffer teye_frame_buffer = TEYE_get_framebuffer(0);
 
-  CharBuffer_append_cursor_move(&screen_buffer, teye_frame_buffer.height + 1,
-                                0);
+  CharBuffer_append_cursor_move(&screen_buffer,
+                                (teye_frame_buffer.height + 1) / 4, 0);
 
   write(STDOUT_FILENO, screen_buffer.buf, screen_buffer.len);
+  screen_buffer.len = 0;
+
+  fflush(stdout);
 }

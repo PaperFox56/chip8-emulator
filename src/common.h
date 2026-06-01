@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define min(a, b) (a < b ? a : b)
+
 /** utils.h
  *
  * This file defines useful, implementation depentent functions that are used by

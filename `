@@ -13,9 +13,6 @@
 #include "terminal/terminal.h"
 #include "timer.h"
 
-#define min(a, b) (a < b ? a : b)
-#define max(a, b) (a > b ? a : b)
-
 static const time_t millis_per_frame = 1000 / 60;
 static const unsigned int chip8_clock_target_frequency = 600; // In Hz
                                                               //
@@ -87,57 +84,21 @@ void CharBuffer_append_string(struct CharBuffer *charbuffer, const char *s) {
 void display_debugging_information() {
   // REGISTERS
 #define print_register(X)                                                      \
-  CharBuffer_append_string(&text_buffer, " " #X ": ");                         \
+  CharBuffer_append_string(&text_buffer, #X ": ");                             \
   CharBuffer_append_hex(&text_buffer, machine->X);
   print_register(PC);
   print_register(SP);
   print_register(DT);
   print_register(ST);
   print_register(I);
-  CharBuffer_append_string(&text_buffer, "\n");
-  for (int i = 0; i < 16; i++) {
-    CharBuffer_append_string(&text_buffer, " V");
-    CharBuffer_append_text(&text_buffer, digits + i, 1);
-    CharBuffer_append_string(&text_buffer, ": ");
-    CharBuffer_append_hex(&text_buffer, machine->V[i]);
-  }
-  CharBuffer_append_string(&text_buffer, "\n\n");
 
 #undef print_register
-#define ANSI_COLOR_RESET "\x1b[0m"
 
-#define FORGROUND "\x1b[38;5;"
-#define BACKGROUND "\x1b[48;5;"
   // MEMORY AROUND PC
-  const int range = 4;
-  for (int i = max(0, machine->PC - range);
-       i < min(machine->PC + range + 1, RAM_SIZE); i++) {
-
-    if (i == machine->PC) {
-      CharBuffer_append_string(&text_buffer,
-                               BACKGROUND "210m" FORGROUND "130m");
-    }
-
-    CharBuffer_append_hex(&text_buffer, i);
-    CharBuffer_append_string(&text_buffer, ": ");
-    CharBuffer_append_hex(&text_buffer, machine->RAM[i]);
-    CharBuffer_append_string(&text_buffer, "\n");
-
-    if (i == machine->PC) {
-      CharBuffer_append_string(&text_buffer, ANSI_COLOR_RESET);
-    }
-  }
 
   // STACK
 
   // KEYBOARD STATE
-  CharBuffer_append_string(&text_buffer, "\n\n");
-  for (int i = 0; i < 16; i++) {
-    CharBuffer_append_string(&text_buffer, " K");
-    CharBuffer_append_text(&text_buffer, digits + i, 1);
-    CharBuffer_append_string(&text_buffer, ": ");
-    CharBuffer_append_hex(&text_buffer, machine->keyboard[i]);
-  }
 
   write(STDOUT_FILENO, text_buffer.buf, text_buffer.len);
 
@@ -155,7 +116,7 @@ void Chip8_Debugger_mainloop() {
   time_t previous_frame = currentTimeMillis();
   time_t previous_timer_update = previous_frame;
 
-  float debugger_speed = 1;
+  float debugger_speed = 1.0f;
 
   /**
    * The CHIP8 specification requires that the timers be uptated at a strict
@@ -185,6 +146,7 @@ void Chip8_Debugger_mainloop() {
     if (display_delta >= millis_per_frame) {
       previous_frame = current_time;
       Display_update(machine);
+      Display_render();
       display_debugging_information();
     }
 

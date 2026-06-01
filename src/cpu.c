@@ -7,7 +7,7 @@
 typedef void (*arithmeticFunction)(uint8_t *, uint8_t *, uint8_t *);
 extern arithmeticFunction arithmetic_functions[];
 
-// the sprites for hexadecimal digits.S
+// the sprites for hexadecimal digits
 static const uint8_t sprite[] = {
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
     0x20, 0x60, 0x20, 0x20, 0x70, // 1
@@ -76,7 +76,7 @@ void Chip8_init(Chip8 *machine) {
   // The stack holds 16 bits values (2 bytes)
   memset(machine->stack, 0, STACK_SIZE * 2);
   memset(machine->RAM, 0, RAM_SIZE);
-  memset(machine->framebuffer, 0, SCREEN_HEIGHT);
+  memset(machine->framebuffer, 0, SCREEN_HEIGHT * sizeof(uint64_t));
   memset(machine->keyboard, 0, 16);
   memset(machine->key_released, 0, 16);
 
@@ -96,8 +96,6 @@ void Chip8_step_through(Chip8 *machine) {
   int X = opcode_high & 0xF; // first argument in register operations
   int Y = opcode_low >> 4;   // first argument in register operations
 
-  machine->PC += 2;
-
 #define address (opcode & 0x0FFF)
 
   switch (group) {
@@ -105,12 +103,14 @@ void Chip8_step_through(Chip8 *machine) {
     if (opcode_low == 0x00E0) { // CLS - clear the screen
       memset(machine->framebuffer, 0, SCREEN_HEIGHT * sizeof(uint64_t));
     } else if (opcode == 0x00EE) { // RET - return from subroutine
-      machine->PC = machine->stack[machine->SP--];
+      machine->PC = machine->stack[--machine->SP];
     }
   } break;
-  case 0x2: // FALLTHROUGH
-            // CALL addr
-    machine->stack[++machine->SP] = machine->PC + 2;
+
+  case 0x2:
+    // CALL addr
+    machine->stack[machine->SP++] = machine->PC + 2;
+    /*fallthrough*/
   case 0x1: // JP addr
     machine->PC = address;
     break;
@@ -230,5 +230,7 @@ void Chip8_step_through(Chip8 *machine) {
 
 #undef address
 
+  machine->PC += 2;
+  machine->PC &= 0x0FFF;
   machine->SP &= 0x0F; // same here
 }
