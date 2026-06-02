@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "cpu.h"
+#include "disassembler.h"
 #include "display.h"
 #include "teye/char_buffer.h"
 
@@ -80,11 +81,12 @@ void Display_render() {
 
 const char digits[] = "0123456789ABCDEF";
 
-void CharBuffer_append_hex(struct CharBuffer *char_buffer, unsigned int num) {
+void CharBuffer_append_hex(struct CharBuffer *char_buffer, unsigned int num,
+                           unsigned int min_digits) {
   char temp[8];
 
   int i = 8;
-  while (num > 0 || (i % 2) != 0 || i == 8) {
+  while (num > 0 || i > (8 - min_digits)) {
     i--;
     temp[i] = digits[num & 0xF];
     num >>= 4;
@@ -102,43 +104,53 @@ void CharBuffer_append_string(struct CharBuffer *charbuffer, const char *s) {
 #define min(a, b) (a < b ? a : b)
 #define max(a, b) (a > b ? a : b)
 
-void display_debugging_information(const Chip8 *machine) {
-  // REGISTERS
-#define print_register(X)                                                      \
-  CharBuffer_append_string(&screen_buffer, " " #X ": ");                       \
-  CharBuffer_append_hex(&screen_buffer, machine->X);
-  print_register(PC);
-  print_register(SP);
-  print_register(DT);
-  print_register(ST);
-  print_register(I);
-  CharBuffer_append_string(&screen_buffer, "\n");
-  for (int i = 0; i < 16; i++) {
-    CharBuffer_append_string(&screen_buffer, " V");
-    CharBuffer_append_text(&screen_buffer, digits + i, 1);
-    CharBuffer_append_string(&screen_buffer, ": ");
-    CharBuffer_append_hex(&screen_buffer, machine->V[i]);
-  }
-  CharBuffer_append_string(&screen_buffer, "\n\n");
-
 #undef print_register
 #define ANSI_COLOR_RESET "\x1b[0m"
 
 #define FORGROUND "\x1b[38;5;"
 #define BACKGROUND "\x1b[48;5;"
+#define clear_screen() CharBuffer_append_string(&screen_buffer, "\x1b[J")
+
+void display_debugging_information(const Chip8 *machine) {
+  clear_screen();
+  // REGISTERS
+#define print_register(X, d)                                                   \
+  CharBuffer_append_string(&screen_buffer, " " #X ": ");                       \
+  CharBuffer_append_hex(&screen_buffer, machine->X, d);
+  print_register(PC, 4);
+  print_register(SP, 2);
+  print_register(DT, 2);
+  print_register(ST, 2);
+  print_register(I, 2);
+  CharBuffer_append_string(&screen_buffer, "\n");
+  for (int i = 0; i < 16; i++) {
+    CharBuffer_append_string(&screen_buffer, " V");
+    CharBuffer_append_text(&screen_buffer, digits + i, 1);
+    CharBuffer_append_string(&screen_buffer, ": ");
+    CharBuffer_append_hex(&screen_buffer, machine->V[i], 2);
+  }
+  CharBuffer_append_string(&screen_buffer, "\n\n");
+
   // MEMORY AROUND PC
-  const int range = 4;
+  const int range = 8;
   for (int i = max(0, machine->PC - range);
-       i < min(machine->PC + range + 1, RAM_SIZE); i++) {
+       i < min(machine->PC + range + 1, RAM_SIZE); i += 2) {
 
     if (i == machine->PC) {
       CharBuffer_append_string(&screen_buffer,
                                BACKGROUND "210m" FORGROUND "130m");
     }
 
-    CharBuffer_append_hex(&screen_buffer, i);
+    uint16_t opcode = (machine->RAM[i] << 8) + machine->RAM[i + 1];
+
+    CharBuffer_append_hex(&screen_buffer, i, 2);
     CharBuffer_append_string(&screen_buffer, ": ");
-    CharBuffer_append_hex(&screen_buffer, machine->RAM[i]);
+    CharBuffer_append_hex(&screen_buffer, opcode, 4);
+    CharBuffer_append_string(&screen_buffer, " ");
+    char temp[32];
+    int len = disassemble_opcode(temp, sizeof(temp), machine->RAM[i],
+                                 machine->RAM[i + 1]);
+    CharBuffer_append_text(&screen_buffer, temp, len);
     CharBuffer_append_string(&screen_buffer, "\n");
 
     if (i == machine->PC) {
@@ -154,7 +166,7 @@ void display_debugging_information(const Chip8 *machine) {
     CharBuffer_append_string(&screen_buffer, " K");
     CharBuffer_append_text(&screen_buffer, digits + i, 1);
     CharBuffer_append_string(&screen_buffer, ": ");
-    CharBuffer_append_hex(&screen_buffer, machine->keyboard[i]);
+    CharBuffer_append_hex(&screen_buffer, machine->keyboard[i], 1);
   }
 
   write(STDOUT_FILENO, screen_buffer.buf, screen_buffer.len);

@@ -1,7 +1,6 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <teye/char_buffer.h>
 #include <time.h>
 #include <unistd.h>
@@ -61,7 +60,7 @@ void Chip8_Debugger_mainloop() {
   time_t previous_frame = currentTimeMillis();
   time_t previous_timer_update = previous_frame;
 
-  float debugger_speed = 1;
+  float debugger_speed = .017;
 
   /**
    * The CHIP8 specification requires that the timers be uptated at a strict
@@ -103,12 +102,11 @@ void Chip8_Debugger_mainloop() {
       if (timer_delta >= (1000 / real_timer_frequency)) {
         cpu_instructions_since_last_timer_update = 0;
         previous_timer_update = current_time;
-        /*/ Update timers
-          if (machine->DT > 0)
-            machine->DT--;
-          if (machine->ST > 0)
-            machine->ST--;
-         */
+        // Update timers
+        if (machine->DT > 0)
+          machine->DT--;
+        if (machine->ST > 0)
+          machine->ST--;
       }
     }
   }

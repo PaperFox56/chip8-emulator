@@ -41,4 +41,9 @@ int load_ROM_from_file_descriptor(uint8_t *mem, unsigned int start,
 int load_ROM_from_file_path(uint8_t *mem, unsigned int start, unsigned int size,
                             const char *path);
 
+void CharBuffer_append_hex(struct CharBuffer *char_buffer, unsigned int num,
+                           unsigned int min_pecision);
+
+void CharBuffer_append_string(struct CharBuffer *charbuffer, const char *s);
+
 #endif
