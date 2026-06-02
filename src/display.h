@@ -16,8 +16,9 @@ int Display_init();
  * Extract all the neccessary information from the machine to update the screen
  * buffers
  */
-void Display_update(Chip8 *machine);
+void Display_update(const Chip8 *machine);
 void Display_render();
+void display_debugging_information(const Chip8 *machine);
 
 #ifdef __cplusplus
 }

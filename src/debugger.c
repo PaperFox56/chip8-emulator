@@ -13,9 +13,6 @@
 #include "terminal/terminal.h"
 #include "timer.h"
 
-#define min(a, b) (a < b ? a : b)
-#define max(a, b) (a > b ? a : b)
-
 static const time_t millis_per_frame = 1000 / 60;
 static const unsigned int chip8_clock_target_frequency = 600; // In Hz
                                                               //
@@ -23,19 +20,9 @@ static Chip8 *machine;
 
 static volatile sig_atomic_t running;
 
-/**
- * Used to render debugging data on the screen.
- */
-static struct CharBuffer text_buffer;
-
 void signal_handler() { running = 0; }
 
 Chip8 *Chip8_Debugger_init(Chip8 *_machine) {
-  if (CharBuffer_init(&text_buffer) != 0) {
-    fprintf(stderr, "Chip8_Debugger_init: Couldn't initialise the CharBuffer");
-    return NULL;
-  }
-
   if (Display_init() != 0) {
     fprintf(stderr,
             "Chip8_Debugger_init: Couldn't initialise the display library");
@@ -61,87 +48,6 @@ int Chip8_Debugger_load_ROM(const char *path) {
   }
 
   return EXIT_SUCCESS;
-}
-
-const char digits[] = "0123456789ABCDEF";
-
-void CharBuffer_append_hex(struct CharBuffer *char_buffer, unsigned int num) {
-  char temp[8];
-
-  int i = 8;
-  while (num > 0 || (i % 2) != 0 || i == 8) {
-    i--;
-    temp[i] = digits[num & 0xF];
-    num >>= 4;
-  }
-
-  fprintf(stderr, "%d\n", i);
-
-  CharBuffer_append_text(char_buffer, temp + i, 8 - i);
-}
-
-void CharBuffer_append_string(struct CharBuffer *charbuffer, const char *s) {
-  CharBuffer_append_text(charbuffer, s, strlen(s));
-}
-
-void display_debugging_information() {
-  // REGISTERS
-#define print_register(X)                                                      \
-  CharBuffer_append_string(&text_buffer, " " #X ": ");                         \
-  CharBuffer_append_hex(&text_buffer, machine->X);
-  print_register(PC);
-  print_register(SP);
-  print_register(DT);
-  print_register(ST);
-  print_register(I);
-  CharBuffer_append_string(&text_buffer, "\n");
-  for (int i = 0; i < 16; i++) {
-    CharBuffer_append_string(&text_buffer, " V");
-    CharBuffer_append_text(&text_buffer, digits + i, 1);
-    CharBuffer_append_string(&text_buffer, ": ");
-    CharBuffer_append_hex(&text_buffer, machine->V[i]);
-  }
-  CharBuffer_append_string(&text_buffer, "\n\n");
-
-#undef print_register
-#define ANSI_COLOR_RESET "\x1b[0m"
-
-#define FORGROUND "\x1b[38;5;"
-#define BACKGROUND "\x1b[48;5;"
-  // MEMORY AROUND PC
-  const int range = 4;
-  for (int i = max(0, machine->PC - range);
-       i < min(machine->PC + range + 1, RAM_SIZE); i++) {
-
-    if (i == machine->PC) {
-      CharBuffer_append_string(&text_buffer,
-                               BACKGROUND "210m" FORGROUND "130m");
-    }
-
-    CharBuffer_append_hex(&text_buffer, i);
-    CharBuffer_append_string(&text_buffer, ": ");
-    CharBuffer_append_hex(&text_buffer, machine->RAM[i]);
-    CharBuffer_append_string(&text_buffer, "\n");
-
-    if (i == machine->PC) {
-      CharBuffer_append_string(&text_buffer, ANSI_COLOR_RESET);
-    }
-  }
-
-  // STACK
-
-  // KEYBOARD STATE
-  CharBuffer_append_string(&text_buffer, "\n\n");
-  for (int i = 0; i < 16; i++) {
-    CharBuffer_append_string(&text_buffer, " K");
-    CharBuffer_append_text(&text_buffer, digits + i, 1);
-    CharBuffer_append_string(&text_buffer, ": ");
-    CharBuffer_append_hex(&text_buffer, machine->keyboard[i]);
-  }
-
-  write(STDOUT_FILENO, text_buffer.buf, text_buffer.len);
-
-  text_buffer.len = 0;
 }
 
 void Chip8_Debugger_mainloop() {
@@ -185,7 +91,8 @@ void Chip8_Debugger_mainloop() {
     if (display_delta >= millis_per_frame) {
       previous_frame = current_time;
       Display_update(machine);
-      display_debugging_information();
+      display_debugging_information(machine);
+    } else {
     }
 
     if (cpu_instructions_since_last_timer_update <
@@ -209,4 +116,4 @@ void Chip8_Debugger_mainloop() {
   // disable_raw_mode();
 }
 
-void Chip8_Debugger_quit() { CharBuffer_free(&text_buffer); }
+void Chip8_Debugger_quit() {}
