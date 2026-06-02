@@ -34,17 +34,20 @@ int disassemble_opcode(char *buffer, unsigned int size, uint8_t opcode_high,
     } else if (opcode == 0x00EE) { // RET - return from subroutine
       // TODO: Add the return address (from the stack)
       push_string("RET");
+    } else {
+      push_string("SYS ");
+      push_hex(opcode & 0x0FFF, 3);
     }
   } break;
 
   case 0x2:
     // CALL addr
     push_string("CALL ");
-    push_hex(address, 4);
+    push_hex(address, 3);
     break;
   case 0x1: // JP addr
     push_string("JP ");
-    push_hex(address, 4);
+    push_hex(address, 3);
     break;
   case 0x3: // SE VX, byte
     push_string("SE V");
@@ -71,7 +74,7 @@ int disassemble_opcode(char *buffer, unsigned int size, uint8_t opcode_high,
     push_hex(opcode_low, 2);
     break;
   case 0x7: // ADD VX, byte
-    push_string("LD V");
+    push_string("ADD V");
     push_hex(X, 1);
     push_string(" ");
     push_hex(opcode_low, 2);
@@ -142,10 +145,10 @@ int disassemble_opcode(char *buffer, unsigned int size, uint8_t opcode_high,
     push_hex(opcode_low & 0xF, 1);
     break;
   case 0xE: {
-    if ((opcode_low & 0x9E) == 0) { // SKP Vx
+    if (opcode_low == 0x9E) { // SKP Vx
       push_string("SKP V");
       push_hex(X, 1);
-    } else if ((opcode_low & 0xA1) == 0) { // SKNP Vx
+    } else if (opcode_low == 0xA1) { // SKNP Vx
       push_string("SKNP V");
       push_hex(X, 1);
     }

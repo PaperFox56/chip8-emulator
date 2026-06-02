@@ -163,10 +163,10 @@ void Chip8_step_through(Chip8 *machine) {
     if (machine->V[X] > 0xF)
       break;
 
-    if ((opcode_low & 0x9E) == 0) { // SKP Vx
+    if (opcode_low == 0x9E) { // SKP Vx
       if (machine->keyboard[machine->V[X]] != 0)
         machine->PC += 2;
-    } else if ((opcode_low & 0xA1) == 0) { // SKNP Vx
+    } else if (opcode_low == 0xA1) { // SKNP Vx
       if (machine->keyboard[machine->V[X]] == 0)
         machine->PC += 2;
     }

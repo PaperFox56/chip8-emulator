@@ -61,7 +61,7 @@ void Chip8_Debugger_mainloop() {
   time_t previous_timer_update = previous_frame;
   time_t previous_cpu_instruction = previous_frame;
 
-  float debugger_speed = .0005;
+  float debugger_speed = 1;
 
   /**
    * The CHIP8 specification requires that the timers be uptated at a strict
