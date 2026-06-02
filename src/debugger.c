@@ -59,8 +59,9 @@ void Chip8_Debugger_mainloop() {
 
   time_t previous_frame = currentTimeMillis();
   time_t previous_timer_update = previous_frame;
+  time_t previous_cpu_instruction = previous_frame;
 
-  float debugger_speed = .017;
+  float debugger_speed = .0005;
 
   /**
    * The CHIP8 specification requires that the timers be uptated at a strict
@@ -76,16 +77,15 @@ void Chip8_Debugger_mainloop() {
    * Then, we can just wait for the timer update time, execute the needed
    * number of instructions, and then wait for the next time.
    */
-  unsigned int cpu_instructions_per_timer_update =
-      chip8_clock_target_frequency / 60;
-  unsigned int real_timer_frequency = debugger_speed * 60; // Hz
-
-  unsigned int cpu_instructions_since_last_timer_update = 0;
+  float real_timer_delay = 1000 / (debugger_speed * 60); // ms
+  float real_cpu_delay =
+      1000 / (debugger_speed * chip8_clock_target_frequency); // ms
 
   while (running) {
     time_t current_time = currentTimeMillis();
     time_t display_delta = current_time - previous_frame;
     time_t timer_delta = current_time - previous_timer_update;
+    time_t cpu_delta = current_time - previous_cpu_instruction;
 
     if (display_delta >= millis_per_frame) {
       previous_frame = current_time;
@@ -94,20 +94,17 @@ void Chip8_Debugger_mainloop() {
     } else {
     }
 
-    if (cpu_instructions_since_last_timer_update <
-        cpu_instructions_per_timer_update) {
-      cpu_instructions_since_last_timer_update++;
+    if (cpu_delta >= real_cpu_delay) {
+      previous_cpu_instruction = current_time;
       Chip8_step_through(machine);
-    } else {
-      if (timer_delta >= (1000 / real_timer_frequency)) {
-        cpu_instructions_since_last_timer_update = 0;
-        previous_timer_update = current_time;
-        // Update timers
-        if (machine->DT > 0)
-          machine->DT--;
-        if (machine->ST > 0)
-          machine->ST--;
-      }
+    }
+    if (timer_delta >= real_timer_delay) {
+      previous_timer_update = current_time;
+      // Update timers
+      if (machine->DT > 0)
+        machine->DT--;
+      if (machine->ST > 0)
+        machine->ST--;
     }
   }
 

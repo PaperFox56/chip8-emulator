@@ -41,7 +41,7 @@ int disassemble_opcode(char *buffer, unsigned int size, uint8_t opcode_high,
     // CALL addr
     push_string("CALL ");
     push_hex(address, 4);
-    /*fallthrough*/
+    break;
   case 0x1: // JP addr
     push_string("JP ");
     push_hex(address, 4);
@@ -121,11 +121,11 @@ int disassemble_opcode(char *buffer, unsigned int size, uint8_t opcode_high,
     break;
   case 0xA: // LD I, addr
     push_string("LD I ");
-    push_hex(opcode_low, 2);
+    push_hex(opcode & 0xFFF, 3);
     break;
   case 0xB: // JP V0, addr
     push_string("JP V0 ");
-    push_hex(opcode_low, 2);
+    push_hex(opcode & 0xFFF, 3);
     break;
   case 0xC: // RND VX kk
     push_string("RND V");

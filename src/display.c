@@ -86,7 +86,7 @@ void CharBuffer_append_hex(struct CharBuffer *char_buffer, unsigned int num,
   char temp[8];
 
   int i = 8;
-  while (num > 0 || i > (8 - min_digits)) {
+  while (num > 0 || i > (8 - (int)min_digits)) {
     i--;
     temp[i] = digits[num & 0xF];
     num >>= 4;
