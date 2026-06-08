@@ -2,3 +2,4 @@ testROMs
 bin/
 log
 src-c
+.zig-cache
