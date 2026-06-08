@@ -1,8 +1,7 @@
 //!
-//! chip8.zig
+//! chip8/cpu.zig
 //!
 //! Defines the structures and behaviours of the CHIP8 virtual machine
-//!
 //!
 
 // --------------- Imports ---------------

@@ -1,19 +1,14 @@
 const std = @import("std");
 
-
 pub fn build(b: *std.Build) void {
-    
     const target = b.standardTargetOptions(.{});
-    
 
     const optimize = b.standardOptimizeOption(.{});
 
-
-    const mod = b.addModule("chemuz8", .{
+    const mod = b.addModule("chemuz8_core", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
     });
-
 
     const exe = b.addExecutable(.{
         .name = "chemuz8",
@@ -22,7 +17,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "chemuz8", .module = mod },
+                .{ .name = "chemuz8_core", .module = mod },
             },
         }),
     });
@@ -30,7 +25,6 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     const run_step = b.step("run", "Run the app");
-
 
     const run_cmd = b.addRunArtifact(exe);
     run_step.dependOn(&run_cmd.step);
@@ -53,10 +47,7 @@ pub fn build(b: *std.Build) void {
 
     const run_exe_tests = b.addRunArtifact(exe_tests);
 
-
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
-
-
 }

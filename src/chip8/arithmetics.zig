@@ -1,7 +1,7 @@
 //!
-//! arithmetics.zig
+//! chip8/arithmetics.zig
 //!
-//! This file defines the ALU operations of the Chip8
+//! This file defines the ALU operations of the Chip8. Don't import this directly.
 
 const ArithmeticFunction = (fn (*u8, *u8, *u8) void);
 

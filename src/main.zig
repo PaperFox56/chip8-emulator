@@ -1,8 +1,9 @@
 const std = @import("std");
 const Io = std.Io;
 
-const chemuz = @import("chemuz8");
-const chip8 = chemuz.chip8;
+const chemuz = @import("chemuz8_core");
+pub const gui = @import("gui/display.zig");
+//pub const tui = @import("tui/display.zig");
 
 pub fn main() !void {
 
@@ -11,7 +12,9 @@ pub fn main() !void {
     var rng = std.Random.DefaultPrng.init(4);
     const rand = rng.random();
 
-    var machine = chip8.Chip8{ .rng = rand };
+    var machine = chemuz.chip8.Chip8{ .rng = rand };
     machine.init();
     machine.step_through();
+
+    std.debug.print("The machine is runnig\n", .{});
 }

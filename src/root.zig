@@ -1,5 +1,8 @@
-//! By convention, root.zig is the root source file when making a package.
-pub const chip8 = @import("chip8.zig");
+//!
+//! root.zig
+//!
+//! This file merely expose the submodules to the user code.
+//!
 
-const std = @import("std");
-const Io = std.Io;
+pub const chip8 = @import("chip8/cpu.zig");
+pub const debugger = @import("debugger/debugger.zig");
