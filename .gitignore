@@ -4,3 +4,4 @@ log
 src-c
 .zig-cache
 zig-out
+zig-pkg

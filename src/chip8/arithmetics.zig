@@ -26,17 +26,11 @@ fn XOR(VX: *u8, VY: *u8, VF: *u8) void {
 }
 
 fn ADD(VX: *u8, VY: *u8, VF: *u8) void {
-    const result = @as(u16, VX.*) + @as(u16, VY.*);
-
-    VF.* = if (result > 0xF) 1 else 0;
-
-    VX.* = @truncate(result);
+    VX.*, VF.* = @addWithOverflow(VX.*, VY.*);
 }
 
 fn SUB(VX: *u8, VY: *u8, VF: *u8) void {
-    VF.* = if (VX.* > VY.*) 1 else 0;
-
-    VX.* -= VY.*;
+    VX.*, VF.* = @subWithOverflow(VX.*, VY.*);
 }
 
 fn SHR(VX: *u8, VY: *u8, VF: *u8) void {
@@ -47,14 +41,11 @@ fn SHR(VX: *u8, VY: *u8, VF: *u8) void {
 }
 
 fn SUBN(VX: *u8, VY: *u8, VF: *u8) void {
-    VF.* = if (VY.* > VX.*) 1 else 0;
-
-    VX.* = VY.* - VX.*;
+    VX.*, VF.* = @subWithOverflow(VY.*, VX.*);
 }
 
 fn SHL(VX: *u8, VY: *u8, VF: *u8) void {
-    VF.* = VX.* >> 7;
-    VX.* = VX.* >> 1;
+    VX.*, VF.* = @shlWithOverflow(VX.*, 1);
 
     _ = VY;
 }

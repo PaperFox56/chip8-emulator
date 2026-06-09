@@ -134,8 +134,8 @@ pub const Chip8 = struct {
             },
             0x3 => { // SE VX, byte
                 if (self.V[op.X] == low)
-                    self.PC += 2;
-                break :interepte 0;
+                    break :interepte 4;
+                break :interepte 2;
             },
             0x4 => if (self.V[op.X] != low) 4 else 2, // SNE VX, byte
             0x5 => if (op.nibble == 0 and self.V[op.X] == self.V[op.Y]) 4 else 2, // SE VX, VY
@@ -144,7 +144,7 @@ pub const Chip8 = struct {
                 break :interepte 2;
             },
             0x7 => { // ADD VX, byte
-                self.V[op.X] += low;
+                self.V[op.X] +%= low;
                 break :interepte 2;
             },
             0x8 => { // ALU operations
