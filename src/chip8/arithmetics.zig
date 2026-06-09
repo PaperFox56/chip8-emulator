@@ -45,9 +45,27 @@ fn SUBN(VX: *u8, VY: *u8, VF: *u8) void {
 }
 
 fn SHL(VX: *u8, VY: *u8, VF: *u8) void {
-    VX.*, VF.* = @shlWithOverflow(VX.*, 1);
+    VF.* = (VX.* >> 7) & 1;
+    VX.* = VX.* << 1;
 
     _ = VY;
 }
 
-pub const arithmetic_functions: [16]?*const ArithmeticFunction = [_]?*const ArithmeticFunction{ LD, OR, AND, XOR, ADD, SUB, SHR, SUBN, null, null, null, null, null, null, SHL, null };
+pub const arithmetic_functions: [16]?*const ArithmeticFunction = [_]?*const ArithmeticFunction{
+    LD,
+    OR,
+    AND,
+    XOR,
+    ADD,
+    SUB,
+    SHR,
+    SUBN,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    SHL,
+    null,
+};
