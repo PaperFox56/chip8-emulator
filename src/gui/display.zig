@@ -10,8 +10,13 @@ const debug = @import("chemuz8_core").debugger;
 const rl = @import("raylib");
 const rgui = @import("raygui");
 
-const GuiState = @import("gui_manager.zig").GuiState;
-const TextBoxManager = @import("gui_manager.zig").TextBoxManager;
+const nfd = @import("nfd");
+
+const gui_manager = @import("gui_manager.zig");
+const GuiState = gui_manager.GuiState;
+const TextBoxManager = gui_manager.TextBoxManager;
+const RegisterMap = gui_manager.RegisterMap;
+const ceilDiv = gui_manager.ceilDiv;
 
 const GuiError = error{
     ScreenTexture,
@@ -62,6 +67,8 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
         .window_height = @intCast(rl.getScreenHeight()),
     };
     TextBoxManager.build_many(gui_state.V[0..]);
+    TextBoxManager.build_many(gui_state.specials[0..]);
+    TextBoxManager.build_many(gui_state.timers[0..]);
 
     // This array will be ussed to draw the chip8's screen
     var screen_pixels: [chip8.screen.pixel_count]u8 = @splat(BLACK);
@@ -72,9 +79,9 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
     };
     defer rl.unloadTexture(screen_texture);
 
+    // Timing
     const target_time_per_frame_ns = 1_000_000_000 / 60;
     var last_frame = std.Io.Clock.awake.now(io).nanoseconds;
-
     //--------------------------------------------------------------------------------------
 
     // Main game loop
@@ -139,8 +146,22 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
         //----------------------------------------------------------------------------------
     }
 }
+// Generate the labels for the general registers at comptime
+pub const register_names = blk: {
+    var temp_names: [16][:0]const u8 = undefined;
+
+    for (0..16) |i| {
+        // Construct the string at compile time.
+        // Adding the \x00 ensures it is a valid sentinel-terminated C-string slice.
+        temp_names[i] = "V" ++ std.fmt.comptimePrint("{X}\x00", .{i});
+    }
+
+    break :blk temp_names;
+};
 
 fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger) void {
+    var total_needed_height: f32 = 0.0;
+
     // Screen
     //--------------------------
     // In tab mode, the screen takes up all of the window's width
@@ -171,71 +192,157 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger)
     // Registers panel
     //--------------------------
 
-    // We need to do some calculations for the layout of the registers
-    const label_size: f32 = @floatFromInt(rgui.getTextWidth("000")); // just an estimate
-    var slot_width = label_size * 2 + panel_configs.padding;
-    const slot_height = 30.0;
-
-    const slot_per_line: f32 = @max(1.0, @divFloor(screen_rect.width, slot_width));
-    const cols = @ceil(16.0 / slot_per_line);
-
-    const panel_rect = rl.Rectangle{
+    var panel_rect = rl.Rectangle{
         .x = screen_rect.x,
         .y = screen_rect.height + panel_configs.padding * 2,
         .width = screen_rect.width,
-        .height = (cols + 2.5) * slot_height,
+        .height = 0.0,
     };
 
-    rgui.setStyle(
-        .default,
-        .{ .control = .text_alignment },
-        @intFromEnum(rgui.TextAlignment.center),
-    );
-    _ = rgui.panel(panel_rect, "GENERAL REGISTER PANEL");
-
-    // Go back to normal aligment
-    rgui.setStyle(
-        .default,
-        .{ .control = .text_alignment },
-        @intFromEnum(rgui.TextAlignment.left),
-    );
-
-    // Take up all of the horizontal space
-    slot_width = panel_rect.width / slot_per_line;
+    var generalRegisters: [16]RegisterMap = undefined;
 
     for (0..16) |i| {
-        const i_f32: f32 = @floatFromInt(i);
-        const x = @mod(i_f32, slot_per_line);
-        const y = @divFloor(i_f32, slot_per_line);
-
-        const manager = &state.V[i];
-
-        var rect = rl.Rectangle{
-            .x = panel_rect.x + panel_configs.padding + x * slot_width,
-            .y = panel_rect.y + panel_configs.padding * 3 + y * (slot_height + panel_configs.padding),
-            .width = label_size,
-            .height = 30,
+        generalRegisters[i] = RegisterMap{
+            .name = register_names[i],
+            .val_ptr = &debugger.machine.V[i],
+            .manager = &state.V[i],
         };
-        var buf: [8:0]u8 = undefined;
-        // We want to show all of the general purpose registers
-        const label = std.fmt.bufPrint(&buf, "V{X}\x00", .{i}) catch "??\x00";
-        _ = rgui.label(rect, @ptrCast(label));
-        rect.x += label_size;
-        rect.width += 5.0;
+    }
+    panel_rect.height = drawRegisterPanel(
+        u8,
+        panel_rect,
+        "GENERAL REGISTERS",
+        generalRegisters[0..],
+        panel_configs.padding,
+    );
 
-        // we only need 2 characters
-        const temp: [:0]u8 = @ptrCast(manager.buffer[0..2]);
-        if (rgui.textBox(rect, temp, manager.edit_mode)) {
-            if (manager.getIntValue(u8)) |value| {
-                debugger.machine.V[i] = value;
+    total_needed_height = panel_rect.height + panel_rect.y;
+    panel_rect.y = total_needed_height + panel_configs.padding;
+
+    panel_rect.height = drawRegisterPanel(
+        u12,
+        panel_rect,
+        "SPECIAL REGISTERS",
+        ([_]RegisterMap{
+            RegisterMap{ .name = "PC", .val_ptr = &debugger.machine.PC, .manager = &state.specials[0] },
+            RegisterMap{ .name = "SP", .val_ptr = &debugger.machine.SP, .manager = &state.specials[1] },
+            RegisterMap{ .name = "I", .val_ptr = &debugger.machine.I, .manager = &state.specials[2] },
+        })[0..],
+        panel_configs.padding * 2,
+    );
+
+    total_needed_height = panel_rect.height + panel_rect.y;
+    panel_rect.y = total_needed_height + panel_configs.padding;
+
+    panel_rect.height = drawRegisterPanel(
+        u8,
+        panel_rect,
+        "TIMERS",
+        ([_]RegisterMap{
+            RegisterMap{ .name = "DT", .val_ptr = &debugger.machine.DT, .manager = &state.timers[0] },
+            RegisterMap{ .name = "ST", .val_ptr = &debugger.machine.ST, .manager = &state.timers[1] },
+        })[0..],
+        panel_configs.padding * 2,
+    );
+
+    total_needed_height = panel_rect.height + panel_rect.y + panel_configs.padding;
+
+    //--------------------------
+
+    // now let's make sure that the window is big enough for everything to fit
+    rl.setWindowSize(@intCast(state.window_width), @intFromFloat(total_needed_height));
+
+    // Disassembly panel
+    //--------------------------
+    if (state.tab_mode) {
+        return;
+    }
+
+    panel_rect = .{
+        .x = panel_configs.padding,
+        .y = panel_configs.padding,
+        .width = screen_rect.width,
+        .height = total_needed_height - panel_configs.padding * 2,
+    };
+
+    _ = rgui.panel(panel_rect, "DISASSEMBLY");
+    //--------------------------
+}
+
+pub fn drawRegisterPanel(
+    comptime reg_type: type,
+    rect: rl.Rectangle,
+    title: [:0]const u8,
+    registers: []const RegisterMap,
+    padding: f32,
+) f32 {
+    const digit_count = ceilDiv(comptime_int, @bitSizeOf(reg_type), 4);
+    const digit_count_f32: f32 = @floatFromInt(digit_count);
+    const slot_height: f32 = 30.0;
+    const label_size = @as(f32, @floatFromInt(rgui.getTextWidth("0,")));
+    const slot_width = label_size * (2.0 + digit_count_f32) + padding;
+
+    // We don't want this value to be 0
+    const slots_per_line = @max(1.0, @divFloor(rect.width - panel_configs.padding, slot_width));
+    const final_slot_width = rect.width / slots_per_line;
+    const cols = @ceil(@as(f32, @floatFromInt(registers.len)) / slots_per_line);
+
+    var _rect = rect;
+    _rect.height = (cols + 0.75) * (slot_height + padding);
+
+    // Render the container panel with centered alignment
+    rgui.setStyle(.default, .{ .control = .text_alignment }, @intFromEnum(rgui.TextAlignment.center));
+    _ = rgui.panel(_rect, title);
+    rgui.setStyle(.default, .{ .control = .text_alignment }, @intFromEnum(rgui.TextAlignment.left));
+
+    const panel_border = 30.0;
+
+    // Display the registers in a grid
+    for (registers, 0..) |reg, i| {
+        const i_f32 = @as(f32, @floatFromInt(i));
+        const x = @mod(i_f32, slots_per_line);
+        const y = @divFloor(i_f32, slots_per_line);
+
+        var slot_rect = rl.Rectangle{
+            .x = rect.x + padding + x * final_slot_width,
+            .y = rect.y + panel_border + y * (slot_height + padding),
+            .width = label_size * 2.0,
+            .height = slot_height,
+        };
+
+        // Render descriptive name tag
+        _ = rgui.label(slot_rect, @ptrCast(reg.name));
+
+        // Push layout boundaries over for the input field text box
+        slot_rect.x += slot_rect.width;
+        slot_rect.width = label_size * digit_count_f32 + 5.0;
+
+        if (!reg.manager.edit_mode) {
+            // Perform type-safe unpackings based on the type
+            switch (reg_type) {
+                u8, u12, u16 => |t| reg.manager.fillFromInt(t, @as(*t, @ptrCast(@alignCast(reg.val_ptr))).*),
+                else => unreachable,
             }
-            manager.edit_mode = !manager.edit_mode;
         }
-        if (!manager.edit_mode) {
-            manager.fillFromInt(u8, debugger.machine.V[i]);
+
+        // Render textbox
+        const temp: [:0]u8 = @ptrCast(reg.manager.buffer[0..digit_count]);
+        if (rgui.textBox(slot_rect, temp, reg.manager.edit_mode)) {
+            reg.manager.edit_mode = !reg.manager.edit_mode;
+
+            // Update the register
+            if (!reg.manager.edit_mode) {
+                switch (reg_type) {
+                    u8, u12, u16 => |t| if (reg.manager.getIntValue(t)) |v| {
+                        @as(*t, @ptrCast(@alignCast(reg.val_ptr))).* = v;
+                    },
+                    else => unreachable,
+                }
+            }
         }
     }
-    //--------------------------
+
+    return _rect.height;
 }
 
 fn initGUI() void {

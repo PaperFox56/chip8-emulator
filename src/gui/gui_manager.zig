@@ -11,6 +11,15 @@ pub const GuiState = struct {
 
     // Input text for each register
     V: [16]TextBoxManager = undefined,
+    specials: [3]TextBoxManager = undefined,
+    timers: [2]TextBoxManager = undefined,
+};
+
+/// Maps a single hardware register to its visual layout metadata
+pub const RegisterMap = struct {
+    name: [:0]const u8,
+    val_ptr: *anyopaque,
+    manager: *TextBoxManager,
 };
 
 pub const TextBoxManager = struct {
@@ -45,7 +54,7 @@ pub const TextBoxManager = struct {
             comptime {
                 // Calculate how many hex characters this type occupies (4 bits per hex character)
                 const bit_count = @typeInfo(T).int.bits;
-                const digit_count = ceilDiv(T, bit_count, 4);
+                const digit_count = ceilDiv(comptime_int, bit_count, 4);
 
                 const digits_str = std.fmt.comptimePrint("{d}", .{digit_count});
 
@@ -59,13 +68,14 @@ pub const TextBoxManager = struct {
 };
 
 // Performs `a/b` but rounded to the next integer
-fn ceilDiv(comptime T: type, comptime a: T, comptime b: T) T {
-    if ((@typeInfo(T) != .int) or @bitSizeOf(T) > 16) {
-        @compileError("Validation failed: Type '" ++ @typeName(T) ++ "' is not a supported type!");
+pub fn ceilDiv(comptime T: type, a: T, b: T) T {
+    if (@typeInfo(T) != .int and T != comptime_int) {
+        @compileError("Validation failed: Type '" ++ @typeName(T) ++ "' is not an integer type!");
     }
 
     if (b == 0) {
         @compileError("There is no way this was not made on purpose");
     }
+
     return (a + b - 1) / b;
 }
