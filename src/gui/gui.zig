@@ -12,6 +12,7 @@ const rgui = @import("raygui");
 
 const nfd = @import("nfd");
 
+const configs = @import("configs.zig");
 const gui_manager = @import("gui_manager.zig");
 const GuiState = gui_manager.GuiState;
 const TextBoxManager = gui_manager.TextBoxManager;
@@ -30,31 +31,9 @@ const DARK_GRAY = 100;
 const GRAY = 200;
 const WHITE = 255;
 
-const text_colors = .{
-    // Register panels
-    .register_labels = 180,
-    .register_fields = 220,
-
-    // Disassembly panel
-    .pc_address = 255,
-    .regular_address = 170,
-    .number_line = 100,
-};
-
-const window_configs = .{
-    .init_width = 800,
-    .init_height = 600,
-    .min_width = 400,
-    .min_height = 600,
-    .resizable = true,
-};
-
-const panel_configs = .{
-    // For the emulator screen
-    .min_screen_size = 300,
-    .padding = 10.0,
-    .font_size = 24,
-};
+const window_configs = configs.Window{};
+const layout_configs = configs.Layout{};
+const text_colors = configs.Text{};
 
 comptime {
     if (window_configs.init_width < window_configs.min_width or
@@ -92,7 +71,7 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
     };
     defer rl.unloadTexture(screen_texture);
 
-    const my_font = rl.loadFontEx("fonts/tahoma.ttf", panel_configs.font_size, null) catch return GuiError.Font;
+    const my_font = rl.loadFontEx("fonts/tahoma.ttf", layout_configs.font_size, null) catch return GuiError.Font;
     defer rl.unloadFont(my_font);
 
     rgui.setFont(my_font);
@@ -104,7 +83,7 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
 
     var instr_count: u32 = 0;
 
-    debugger.emulation_speed = 1;
+    debugger.emulation_speed = 100;
     debugger.init(@intCast(last_frame));
 
     // Main game loop
@@ -170,7 +149,7 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
         gui_state.window_width = @intCast(rl.getScreenWidth());
         gui_state.window_height = @intCast(rl.getScreenHeight());
 
-        gui_state.tab_mode = gui_state.window_width < panel_configs.min_screen_size * 2;
+        gui_state.tab_mode = gui_state.window_width < layout_configs.min_screen_size * 2;
 
         rl.beginDrawing();
         defer rl.endDrawing();
@@ -208,10 +187,10 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
             state.window_width / 2,
     );
     const screen_rect = rl.Rectangle{
-        .x = @as(f32, @floatFromInt(state.window_width)) - panel_size + panel_configs.padding,
-        .y = panel_configs.padding,
-        .width = panel_size - panel_configs.padding * 2,
-        .height = panel_size / 2 - panel_configs.padding * 2,
+        .x = @as(f32, @floatFromInt(state.window_width)) - panel_size + layout_configs.padding,
+        .y = layout_configs.padding,
+        .width = panel_size - layout_configs.padding * 2,
+        .height = panel_size / 2 - layout_configs.padding * 2,
     };
 
     // Render the texture
@@ -230,7 +209,7 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
 
     var panel_rect = rl.Rectangle{
         .x = screen_rect.x,
-        .y = screen_rect.height + panel_configs.padding * 2,
+        .y = screen_rect.height + layout_configs.padding * 2,
         .width = screen_rect.width,
         .height = 0.0,
     };
@@ -249,11 +228,11 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
         panel_rect,
         "GENERAL REGISTERS",
         generalRegisters[0..],
-        panel_configs.padding,
+        layout_configs.padding,
     );
 
     total_needed_height = panel_rect.height + panel_rect.y;
-    panel_rect.y = total_needed_height + panel_configs.padding;
+    panel_rect.y = total_needed_height + layout_configs.padding;
 
     panel_rect.height = drawRegisterPanel(
         u12,
@@ -263,11 +242,11 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
             RegisterMap{ .name = "PC", .val_ptr = &debugger.machine.PC, .manager = &state.specials[0] },
             RegisterMap{ .name = "I", .val_ptr = &debugger.machine.I, .manager = &state.specials[2] },
         })[0..],
-        panel_configs.padding * 2,
+        layout_configs.padding * 2,
     );
 
     total_needed_height = panel_rect.height + panel_rect.y;
-    panel_rect.y = total_needed_height + panel_configs.padding;
+    panel_rect.y = total_needed_height + layout_configs.padding;
 
     panel_rect.height = drawRegisterPanel(
         u8,
@@ -278,10 +257,10 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
             RegisterMap{ .name = "DT", .val_ptr = &debugger.machine.DT, .manager = &state.timers[0] },
             RegisterMap{ .name = "ST", .val_ptr = &debugger.machine.ST, .manager = &state.timers[1] },
         })[0..],
-        panel_configs.padding * 2,
+        layout_configs.padding * 2,
     );
 
-    total_needed_height = panel_rect.height + panel_rect.y + panel_configs.padding;
+    total_needed_height = panel_rect.height + panel_rect.y + layout_configs.padding;
 
     // Let's make sure that the PC stays a multiple of two
     if (debugger.machine.PC % 2 == 1) debugger.machine.PC -= 1;
@@ -292,10 +271,10 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
     //--------------------------
     if (!state.tab_mode) {
         panel_rect = .{
-            .x = panel_configs.padding,
-            .y = panel_configs.padding,
+            .x = layout_configs.padding,
+            .y = layout_configs.padding,
             .width = screen_rect.width,
-            .height = total_needed_height - panel_configs.padding * 2,
+            .height = total_needed_height - layout_configs.padding * 2,
         };
 
         _ = rgui.panel(panel_rect, "DISASSEMBLY");
@@ -329,7 +308,7 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
             const address = start_address + i * 2;
 
             var rect = rl.Rectangle{
-                .x = panel_rect.x + panel_configs.padding,
+                .x = panel_rect.x + layout_configs.padding,
                 .y = panel_rect.y + offset + y * (line_height + padding),
                 .width = 200,
                 .height = line_height,
@@ -374,7 +353,7 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
 
     if (rgui.button(
         .{
-            .x = panel_configs.padding,
+            .x = layout_configs.padding,
             .y = total_needed_height,
             .width = 100.0,
             .height = control_height,
@@ -395,7 +374,7 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
         }
     }
 
-    total_needed_height += control_height + panel_configs.padding;
+    total_needed_height += control_height + layout_configs.padding;
     // now let's make sure that the window is big enough for everything to fit
     rl.setWindowSize(@intCast(state.window_width), @intFromFloat(total_needed_height));
     //--------------------------
@@ -415,7 +394,7 @@ pub fn drawRegisterPanel(
     const slot_width = label_size * (2.0 + digit_count_f32) + padding;
 
     // We don't want this value to be 0
-    const slots_per_line = @max(1.0, @divFloor(rect.width - panel_configs.padding, slot_width));
+    const slots_per_line = @max(1.0, @divFloor(rect.width - layout_configs.padding, slot_width));
     const final_slot_width = rect.width / slots_per_line;
     const cols = @ceil(@as(f32, @floatFromInt(registers.len)) / slots_per_line);
 
@@ -497,7 +476,7 @@ fn initGUI() void {
     rgui.setStyle(
         .default,
         .{ .default = .text_size },
-        panel_configs.font_size,
+        layout_configs.font_size,
     );
 }
 
