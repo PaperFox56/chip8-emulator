@@ -5,6 +5,9 @@ pub const GuiState = struct {
     window_height: u32,
 
     tab_mode: bool = false,
+    // If true, the disassembly panel will be centered around
+    // the current instruction address
+    follow_PC: bool = true,
 
     // Keys
     pause_key_pressed: bool = false,
@@ -28,6 +31,9 @@ pub const TextBoxManager = struct {
 
     // No textbox will need more than 4 hex characters
     buffer: [5:0]u8 = @splat(0),
+    // For later
+    read_breakpoint: bool = false,
+    write_breakpoint: bool = true,
 
     pub fn build_many(dest: []TextBoxManager) void {
         for (0..dest.len) |i| {

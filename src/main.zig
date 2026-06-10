@@ -2,7 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 
 const chemuz = @import("chemuz8_core");
-pub const gui = @import("gui/display.zig");
+pub const gui = @import("gui/gui.zig");
 //pub const tui = @import("tui/display.zig");
 
 pub fn main(init: std.process.Init) !void {

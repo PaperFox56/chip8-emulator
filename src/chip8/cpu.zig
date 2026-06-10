@@ -10,7 +10,7 @@ const Random = @import("std").Random;
 // ---------------------------------------
 
 // ------------- CHIP8 specs -------------
-pub const stack_size = 16;
+pub const stack_size = 256;
 pub const ram_size = 0x1000; // 4096 bytes or 2^12
 
 /// The address where the ROM is loaded in RAM. This is also the address
@@ -27,7 +27,7 @@ pub const screen = .{
 
 /// Represent the layout of a Chip8 instruction
 /// This is useful to quickly unpack the parts of an instruction.
-const Opcode = packed struct(u16) {
+pub const Opcode = packed struct(u16) {
     nibble: u4,
     Y: u4,
     X: u4,
@@ -67,7 +67,7 @@ pub const Chip8 = struct {
     V: [16]u8 = @splat(0),
 
     // stack pointer
-    SP: u12 = 0,
+    SP: u8 = 0,
     // program counter
     PC: u12 = start_address,
     // address register
@@ -114,7 +114,7 @@ pub const Chip8 = struct {
                     self.framebuffer = @splat(0);
                     break :interepte 2;
                 } else if (instruction == 0x00EE) { // RET - return from subroutine
-                    self.SP -= 1;
+                    self.SP -%= 1;
                     self.PC = self.stack[self.SP];
                     break :interepte 0;
                 } else {
@@ -129,7 +129,7 @@ pub const Chip8 = struct {
             0x2 => {
                 // CALL addr
                 self.stack[self.SP] = self.PC + 2;
-                self.SP += 1;
+                self.SP +%= 1;
                 continue :interepte 0x1; // Jump
             },
             0x3 => { // SE VX, byte

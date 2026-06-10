@@ -20,6 +20,7 @@ const ceilDiv = gui_manager.ceilDiv;
 
 const GuiError = error{
     ScreenTexture,
+    Font,
 };
 
 // For drawing
@@ -28,6 +29,17 @@ const BLACK = 0;
 const DARK_GRAY = 100;
 const GRAY = 200;
 const WHITE = 255;
+
+const text_colors = .{
+    // Register panels
+    .register_labels = 180,
+    .register_fields = 220,
+
+    // Disassembly panel
+    .pc_address = 255,
+    .regular_address = 170,
+    .number_line = 100,
+};
 
 const window_configs = .{
     .init_width = 800,
@@ -41,6 +53,7 @@ const panel_configs = .{
     // For the emulator screen
     .min_screen_size = 300,
     .padding = 10.0,
+    .font_size = 24,
 };
 
 comptime {
@@ -79,13 +92,37 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
     };
     defer rl.unloadTexture(screen_texture);
 
+    const my_font = rl.loadFontEx("fonts/tahoma.ttf", panel_configs.font_size, null) catch return GuiError.Font;
+    defer rl.unloadFont(my_font);
+
+    rgui.setFont(my_font);
+
     // Timing
     const target_time_per_frame_ns = 1_000_000_000 / 60;
     var last_frame = std.Io.Clock.awake.now(io).nanoseconds;
     //--------------------------------------------------------------------------------------
 
+    var instr_count: u32 = 0;
+
+    debugger.emulation_speed = 1;
+    debugger.init(@intCast(last_frame));
+
     // Main game loop
-    while (!rl.windowShouldClose()) { // Detect window close button or ESC key
+    while (true) { // Detect window close button or ESC key
+
+        const current_time_ns = std.Io.Clock.awake.now(io).nanoseconds;
+        const delta = current_time_ns - last_frame;
+
+        if (debugger.update(@intCast(current_time_ns)))
+            instr_count += 1;
+
+        if (delta < target_time_per_frame_ns) {
+            continue;
+        }
+
+        if (rl.windowShouldClose()) {
+            break;
+        }
         // Update
         //----------------------------------------------------------------------------------
         // File the screen texture with the content of the chip8 framebuffer
@@ -123,25 +160,24 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
         // Draw
         //----------------------------------------------------------------------------------
 
-        const current_time_ns = std.Io.Clock.awake.now(io).nanoseconds;
+        const IPS = instr_count * 60;
+        std.debug.print("IPS: {}, FPS: {}\n", .{ IPS, @divTrunc(1_000_000_000, delta) });
+        instr_count = 0;
 
-        if (current_time_ns - last_frame >= target_time_per_frame_ns) {
-            last_frame = current_time_ns;
+        last_frame = current_time_ns;
 
-            // Get the window's size in case it was rescaled
-            gui_state.window_width = @intCast(rl.getScreenWidth());
-            gui_state.window_height = @intCast(rl.getScreenHeight());
+        // Get the window's size in case it was rescaled
+        gui_state.window_width = @intCast(rl.getScreenWidth());
+        gui_state.window_height = @intCast(rl.getScreenHeight());
 
-            gui_state.tab_mode = gui_state.window_width < panel_configs.min_screen_size * 2;
+        gui_state.tab_mode = gui_state.window_width < panel_configs.min_screen_size * 2;
 
-            rl.beginDrawing();
-            defer rl.endDrawing();
+        rl.beginDrawing();
+        defer rl.endDrawing();
 
-            rl.clearBackground(.white);
-            debugger.update();
+        rl.clearBackground(.white);
 
-            draw(&gui_state, screen_texture, debugger);
-        }
+        draw(&gui_state, screen_texture, debugger, io);
 
         //----------------------------------------------------------------------------------
     }
@@ -159,7 +195,7 @@ pub const register_names = blk: {
     break :blk temp_names;
 };
 
-fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger) void {
+fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger, io: std.Io) void {
     var total_needed_height: f32 = 0.0;
 
     // Screen
@@ -225,7 +261,6 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger)
         "SPECIAL REGISTERS",
         ([_]RegisterMap{
             RegisterMap{ .name = "PC", .val_ptr = &debugger.machine.PC, .manager = &state.specials[0] },
-            RegisterMap{ .name = "SP", .val_ptr = &debugger.machine.SP, .manager = &state.specials[1] },
             RegisterMap{ .name = "I", .val_ptr = &debugger.machine.I, .manager = &state.specials[2] },
         })[0..],
         panel_configs.padding * 2,
@@ -237,8 +272,9 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger)
     panel_rect.height = drawRegisterPanel(
         u8,
         panel_rect,
-        "TIMERS",
+        "MISC",
         ([_]RegisterMap{
+            RegisterMap{ .name = "SP", .val_ptr = &debugger.machine.SP, .manager = &state.specials[1] },
             RegisterMap{ .name = "DT", .val_ptr = &debugger.machine.DT, .manager = &state.timers[0] },
             RegisterMap{ .name = "ST", .val_ptr = &debugger.machine.ST, .manager = &state.timers[1] },
         })[0..],
@@ -247,25 +283,121 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger)
 
     total_needed_height = panel_rect.height + panel_rect.y + panel_configs.padding;
 
-    //--------------------------
+    // Let's make sure that the PC stays a multiple of two
+    if (debugger.machine.PC % 2 == 1) debugger.machine.PC -= 1;
 
-    // now let's make sure that the window is big enough for everything to fit
-    rl.setWindowSize(@intCast(state.window_width), @intFromFloat(total_needed_height));
+    //--------------------------
 
     // Disassembly panel
     //--------------------------
-    if (state.tab_mode) {
-        return;
+    if (!state.tab_mode) {
+        panel_rect = .{
+            .x = panel_configs.padding,
+            .y = panel_configs.padding,
+            .width = screen_rect.width,
+            .height = total_needed_height - panel_configs.padding * 2,
+        };
+
+        _ = rgui.panel(panel_rect, "DISASSEMBLY");
+
+        const line_height = 20.0;
+
+        const padding = 5.0;
+        const offset = 30.0;
+
+        const count: usize = @intFromFloat((panel_rect.height - offset) / (line_height + padding));
+        const pc_address = debugger.machine.PC;
+        const byte_span = count * 2;
+
+        const start_address = blk: {
+            var val: usize = 0;
+
+            if (pc_address + byte_span >= chip8.ram_size) {
+                val = chip8.ram_size - byte_span;
+            } else {
+                const half_span = byte_span / 2;
+                val = pc_address -| half_span;
+            }
+
+            if (val % 2 == 1) val += 1;
+
+            break :blk val;
+        };
+
+        for (0..count) |i| {
+            const y = @as(f32, @floatFromInt(i));
+            const address = start_address + i * 2;
+
+            var rect = rl.Rectangle{
+                .x = panel_rect.x + panel_configs.padding,
+                .y = panel_rect.y + offset + y * (line_height + padding),
+                .width = 200,
+                .height = line_height,
+            };
+
+            if (address == pc_address) {
+                // Let's make this one shine a bit
+                rl.drawRectangle(
+                    @intFromFloat(panel_rect.x),
+                    @intFromFloat(rect.y),
+                    @intFromFloat(panel_rect.width),
+                    @intFromFloat(line_height),
+                    rl.Color.init(255, 109, 194, 150),
+                );
+            }
+
+            const op = (@as(u16, debugger.machine.ram[address]) << 8) + debugger.machine.ram[address + 1];
+
+            var buffer: [32]u8 = @splat(0);
+            rgui.setStyle(.default, .{ .control = .text_color_normal }, text_colors.number_line);
+            _ = rgui.label(
+                rect,
+                @ptrCast(std.fmt.bufPrint(buffer[0..], "{X:03}", .{address}) catch "???\x00"),
+            );
+
+            rect.x += 60.0;
+            if (address == pc_address) {
+                rgui.setStyle(.default, .{ .control = .text_color_normal }, text_colors.pc_address);
+            } else {
+                rgui.setStyle(.default, .{ .control = .text_color_normal }, text_colors.regular_address);
+            }
+            buffer = @splat(0);
+            _ = rgui.label(rect, debug.disassemble(buffer[0..], op));
+        }
     }
 
-    panel_rect = .{
-        .x = panel_configs.padding,
-        .y = panel_configs.padding,
-        .width = screen_rect.width,
-        .height = total_needed_height - panel_configs.padding * 2,
-    };
+    //--------------------------
 
-    _ = rgui.panel(panel_rect, "DISASSEMBLY");
+    // Controls
+    //--------------------------
+    const control_height = 30.0;
+
+    if (rgui.button(
+        .{
+            .x = panel_configs.padding,
+            .y = total_needed_height,
+            .width = 100.0,
+            .height = control_height,
+        },
+        "Load ROM",
+    )) {
+        // TODO: properly handle the errors
+        if (nfd.openFileDialog("ch8", null) catch null) |path| {
+            // Defer freeing the memory string handled by the native C library
+            defer nfd.freePath(path);
+
+            std.debug.print("User selected ROM file path: {s}\n", .{path});
+
+            debugger.load_ROM(io, path) catch unreachable;
+        } else {
+            // The user closed the window or clicked the "Cancel" option button
+            std.debug.print("User cancelled file selection.\n", .{});
+        }
+    }
+
+    total_needed_height += control_height + panel_configs.padding;
+    // now let's make sure that the window is big enough for everything to fit
+    rl.setWindowSize(@intCast(state.window_width), @intFromFloat(total_needed_height));
     //--------------------------
 }
 
@@ -310,7 +442,7 @@ pub fn drawRegisterPanel(
             .height = slot_height,
         };
 
-        // Render descriptive name tag
+        rgui.setStyle(.label, .{ .control = .text_color_normal }, text_colors.register_labels);
         _ = rgui.label(slot_rect, @ptrCast(reg.name));
 
         // Push layout boundaries over for the input field text box
@@ -327,6 +459,7 @@ pub fn drawRegisterPanel(
 
         // Render textbox
         const temp: [:0]u8 = @ptrCast(reg.manager.buffer[0..digit_count]);
+        rgui.setStyle(.textbox, .{ .control = .text_color_normal }, text_colors.register_fields);
         if (rgui.textBox(slot_rect, temp, reg.manager.edit_mode)) {
             reg.manager.edit_mode = !reg.manager.edit_mode;
 
@@ -352,26 +485,19 @@ fn initGUI() void {
     // Mkae the window resizable
     const flags = rl.ConfigFlags{
         .window_resizable = window_configs.resizable,
+        .vsync_hint = true,
     };
     rl.setConfigFlags(flags);
     rl.initWindow(windowWidth, windowHeight, "Chemuz8");
 
     rl.setWindowMinSize(window_configs.min_width, window_configs.min_height);
 
-    rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
-
     // Set global styles
-
-    rgui.setStyle(
-        .label,
-        .{ .control = .text_color_normal },
-        DARK_GRAY,
-    );
 
     rgui.setStyle(
         .default,
         .{ .default = .text_size },
-        24,
+        panel_configs.font_size,
     );
 }
 
