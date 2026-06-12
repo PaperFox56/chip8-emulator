@@ -34,6 +34,7 @@ const WHITE = 255;
 const window_configs = configs.Window{};
 const layout_configs = configs.Layout{};
 const text_colors = configs.Text{};
+const input_configs = configs.small_keyboard_input_defaults;
 
 comptime {
     if (window_configs.init_width < window_configs.min_width or
@@ -71,17 +72,18 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
     };
     defer rl.unloadTexture(screen_texture);
 
-    const my_font = rl.loadFontEx("fonts/tahoma.ttf", layout_configs.font_size, null) catch return GuiError.Font;
-    defer rl.unloadFont(my_font);
+    const my_font: ?rl.Font = rl.loadFontEx("fonts/tahoma.ttf", layout_configs.font_size, null) catch null;
 
-    rgui.setFont(my_font);
+    if (my_font) |font| {
+        rgui.setFont(font);
+    }
 
     // Timing
     const target_time_per_frame_ns = 1_000_000_000 / 60;
     var last_frame = std.Io.Clock.awake.now(io).nanoseconds;
     //--------------------------------------------------------------------------------------
 
-    var instr_count: u32 = 0;
+    //var instr_count: u32 = 0;
 
     debugger.emulation_speed = 100;
     debugger.init(@intCast(last_frame));
@@ -92,8 +94,9 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
         const current_time_ns = std.Io.Clock.awake.now(io).nanoseconds;
         const delta = current_time_ns - last_frame;
 
-        if (debugger.update(@intCast(current_time_ns)))
-            instr_count += 1;
+        if (debugger.update(@intCast(current_time_ns))) {
+            //instr_count += 1;
+        }
 
         if (delta < target_time_per_frame_ns) {
             continue;
@@ -125,7 +128,7 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
 
         // Input
         // --------------------------------------------
-        if (rl.isKeyPressed(.space)) {
+        if (rl.isKeyPressed(input_configs.pause)) {
             if (!gui_state.pause_key_pressed) {
                 gui_state.pause_key_pressed = true;
 
@@ -134,14 +137,28 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
         } else {
             gui_state.pause_key_pressed = false;
         }
+        for (input_configs.keyboard_map, 0..) |key, i| {
+            debugger.machine.key_released[i] = false;
+
+            if (rl.isKeyPressed(key)) {
+                debugger.machine.key_pressed[i] = true;
+            }
+            if (rl.isKeyReleased(key)) {
+                if (debugger.machine.key_pressed[i]) {
+                    std.debug.print("Key {} is pressed", .{i});
+                    debugger.machine.key_released[i] = true;
+                    debugger.machine.key_pressed[i] = false;
+                }
+            }
+        }
         // --------------------------------------------
 
         // Draw
         //----------------------------------------------------------------------------------
 
-        const IPS = instr_count * 60;
-        std.debug.print("IPS: {}, FPS: {}\n", .{ IPS, @divTrunc(1_000_000_000, delta) });
-        instr_count = 0;
+        //const IPS = instr_count * 60;
+        //std.debug.print("IPS: {}, FPS: {}\n", .{ IPS, @divTrunc(1_000_000_000, delta) });
+        //instr_count = 0;
 
         last_frame = current_time_ns;
 
@@ -159,6 +176,10 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
         draw(&gui_state, screen_texture, debugger, io);
 
         //----------------------------------------------------------------------------------
+    }
+
+    if (my_font) |font| {
+        rl.unloadFont(font);
     }
 }
 // Generate the labels for the general registers at comptime

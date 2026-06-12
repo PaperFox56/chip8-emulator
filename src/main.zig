@@ -15,10 +15,6 @@ pub fn main(init: std.process.Init) !void {
 
     var machine = chemuz.chip8.Chip8{ .rng = rand };
     var debugger = chemuz.debugger.Debugger{ .machine = &machine };
-    try debugger.load_ROM(
-        io,
-        "testROMs/test_opcode.ch8",
-    );
 
     std.debug.print("The machine is running\n", .{});
 

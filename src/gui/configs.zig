@@ -30,5 +30,9 @@ pub const Layout = struct {
 
 pub const Input = struct {
     pause: Key = .space,
-    keyboard_map: [16]Key = .{ .z, .x, .c, .v, .a, .s, .d, .f, .q, .w, .e, .r, .kp_1, .kp_2, .kp_3, .kp_4 },
+    keyboard_map: [16]Key,
+};
+
+pub const small_keyboard_input_defaults: Input = .{
+    .keyboard_map = .{ .z, .x, .c, .v, .a, .s, .d, .f, .q, .w, .e, .r, .kp_1, .kp_2, .kp_3, .kp_4 },
 };

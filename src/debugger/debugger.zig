@@ -90,6 +90,7 @@ pub const Debugger = struct {
     }
 
     pub fn load_ROM(self: *Debugger, io: std.Io, path: []const u8) DebuggerError!void {
+        self.machine.ram = @splat(0);
         rom_utils.load_ROM_from_file_path(
             io,
             self.machine.ram[chip8.start_address..],
@@ -102,5 +103,9 @@ pub const Debugger = struct {
             );
             return DebuggerError.LoadRom;
         };
+
+        self.machine.PC = chip8.start_address;
+        self.machine.framebuffer = @splat(0);
+        self.paused = true;
     }
 };
