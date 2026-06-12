@@ -35,7 +35,7 @@ fn SUB(VX: *u8, VY: *u8, VF: *u8) void {
 
 fn SHR(VX: *u8, VY: *u8, VF: *u8) void {
     VF.* = VX.* & 1;
-    VX.* = VX.* << 1;
+    VX.* = VX.* >> 1;
 
     _ = VY;
 }

@@ -231,13 +231,13 @@ pub const Chip8 = struct {
                     break :interepte 2;
                 },
                 0x55 => { // LD [I], VX
-                    for (0..op.X) |i| {
+                    for (0..op.X + 1) |i| {
                         self.ram[self.I + i] = self.V[i];
                     }
                     break :interepte 2;
                 },
                 0x65 => { // LD VX, [I]
-                    for (0..op.X) |i| {
+                    for (0..op.X + 1) |i| {
                         self.V[i] = self.ram[self.I + i];
                     }
                     break :interepte 2;

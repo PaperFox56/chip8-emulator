@@ -12,6 +12,10 @@ pub const GuiState = struct {
     // Keys
     pause_key_pressed: bool = false,
 
+    // Widgets
+    speed_spiner_edit: bool = false,
+    speed_spiner_value: i32 = 100,
+
     // Input text for each register
     V: [16]TextBoxManager = undefined,
     specials: [3]TextBoxManager = undefined,

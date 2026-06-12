@@ -83,10 +83,10 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
     var last_frame = std.Io.Clock.awake.now(io).nanoseconds;
     //--------------------------------------------------------------------------------------
 
-    //var instr_count: u32 = 0;
+    var instr_count: u32 = 0;
 
     debugger.emulation_speed = 100;
-    debugger.init(@intCast(last_frame));
+    debugger.reset_time(@intCast(last_frame));
 
     // Main game loop
     while (true) { // Detect window close button or ESC key
@@ -94,8 +94,16 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
         const current_time_ns = std.Io.Clock.awake.now(io).nanoseconds;
         const delta = current_time_ns - last_frame;
 
-        if (debugger.update(@intCast(current_time_ns))) {
-            //instr_count += 1;
+        if (debugger.paused) {
+            // no need to waste cpu cycles here
+            _ = io.sleep(
+                std.Io.Duration.fromNanoseconds(target_time_per_frame_ns - delta),
+                std.Io.Clock.awake,
+            ) catch null;
+        } else {
+            if (debugger.update(@intCast(current_time_ns))) {
+                instr_count += 1;
+            }
         }
 
         if (delta < target_time_per_frame_ns) {
@@ -132,10 +140,20 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
             if (!gui_state.pause_key_pressed) {
                 gui_state.pause_key_pressed = true;
 
+                if (debugger.paused) {
+                    debugger.reset_time(@intCast(current_time_ns));
+                }
                 debugger.paused = !debugger.paused;
             }
         } else {
             gui_state.pause_key_pressed = false;
+        }
+        if (rl.isKeyPressed(.i) and debugger.paused) {
+            debugger.step();
+        }
+        if (rl.isKeyPressed(.delete)) {
+            // clear the screen
+            debugger.machine.framebuffer = @splat(0);
         }
         for (input_configs.keyboard_map, 0..) |key, i| {
             debugger.machine.key_released[i] = false;
@@ -156,9 +174,9 @@ pub fn run(io: std.Io, debugger: *debug.Debugger) GuiError!void {
         // Draw
         //----------------------------------------------------------------------------------
 
-        //const IPS = instr_count * 60;
-        //std.debug.print("IPS: {}, FPS: {}\n", .{ IPS, @divTrunc(1_000_000_000, delta) });
-        //instr_count = 0;
+        const IPS = instr_count * 60;
+        std.debug.print("IPS: {}, FPS: {}\n", .{ IPS, @divTrunc(1_000_000_000, delta) });
+        instr_count = 0;
 
         last_frame = current_time_ns;
 
@@ -371,15 +389,17 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
     // Controls
     //--------------------------
     const control_height = 30.0;
+    const button_text = "Load ROM";
+    const button_width: f32 = @floatFromInt(rgui.getTextWidth(button_text) + 10);
 
     if (rgui.button(
         .{
             .x = layout_configs.padding,
             .y = total_needed_height,
-            .width = 100.0,
+            .width = button_width,
             .height = control_height,
         },
-        "Load ROM",
+        button_text,
     )) {
         // TODO: properly handle the errors
         if (nfd.openFileDialog("ch8", null) catch null) |path| {
@@ -393,6 +413,25 @@ fn draw(state: *GuiState, screen_texture: rl.Texture, debugger: *debug.Debugger,
             // The user closed the window or clicked the "Cancel" option button
             std.debug.print("User cancelled file selection.\n", .{});
         }
+    }
+
+    const spinner_edited = rgui.spinner(
+        .{
+            .x = layout_configs.padding * 2 + button_width * 2,
+            .y = total_needed_height,
+            .width = 100.0,
+            .height = control_height,
+        },
+        "Speed",
+        &state.speed_spiner_value,
+        1,
+        1000,
+        state.speed_spiner_edit,
+    );
+
+    if (spinner_edited != 0) {
+        state.speed_spiner_edit = !state.speed_spiner_edit;
+        debugger.emulation_speed = @intCast(state.speed_spiner_value);
     }
 
     total_needed_height += control_height + layout_configs.padding;

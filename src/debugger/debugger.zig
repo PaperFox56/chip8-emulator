@@ -32,18 +32,38 @@ pub const Debugger = struct {
     paused: bool = true,
 
     // Timing related variables
-    time_since_last_cpu_instruction: time_t = 0, // in ns
-    time_since_last_timer_update: time_t = 0, // in ns
+    tick_duration: time_t = undefined, // ns
 
-    emulation_speed: time_t = 100, // in percents
+    ticks_per_cpu_instruction: time_t = undefined,
+    ticks_per_timer_update: time_t = undefined,
 
-    /// Should be called before ANY call to `update`
-    pub fn init(self: *Debugger, time: time_t) void {
-        self.time_since_last_cpu_instruction = time;
-        self.time_since_last_timer_update = time;
+    ticks_since_last_timer_update: time_t = undefined,
+
+    time_since_last_cpu_instruction: time_t = undefined, // in ns
+
+    emulation_speed: time_t = undefined, // in percents
+
+    pub fn set_emulation_speed(self: *Debugger, speed: time_t) void {
+        self.emulation_speed = @max(1, speed);
+
+        // one tick represent one-millionth of a second in simulation time so 1000 ns.
+        // Here we calculate the tick duration in real nanoseconds
+        self.tick_duration = 1000 * 100 / speed;
+
+        self.ticks_per_cpu_instruction = ONE_SECOND / (self.tick_duration * chip8_specs.target_cpu_frequency);
+        self.ticks_per_timer_update = ONE_SECOND / (self.tick_duration * chip8_specs.target_cpu_frequency);
     }
 
-    /// Before calling this method, make sure that you called `init` just before you mainloop.
+    /// Should be called everytime the debugger is unpaused
+    pub fn reset_time(self: *Debugger, time: time_t) void {
+        self.time_since_last_cpu_instruction = time;
+        self.ticks_since_last_timer_update = 0;
+
+        self.set_emulation_speed(100);
+    }
+
+    /// Before calling this method, make sure that you called `reset_time` just before you mainloop
+    /// and every time you unpause the debugger. It is necessary to keep a consistant speed.
     ///
     /// This function is what allows the debugger to be completely
     /// independant from an interface.
@@ -64,30 +84,41 @@ pub const Debugger = struct {
     /// For debuggin reasons, returns true if a cpu instruction was executed.
     ///
     pub fn update(self: *Debugger, time: time_t) bool {
-        if (self.paused) {
-            return false;
+        const ticks_since_last_cpu_instruction = (time - self.time_since_last_cpu_instruction) / self.tick_duration;
+
+        if (self.ticks_since_last_timer_update >= self.ticks_per_timer_update) {
+            update_timers(self);
         }
 
-        const target_time_per_timer_update = ONE_SECOND / chip8_specs.timer_frequency;
-        const emulation_target_time_per_timer_update = 100 * target_time_per_timer_update / self.emulation_speed;
-
-        if (time - self.time_since_last_timer_update >= emulation_target_time_per_timer_update) {
-            self.time_since_last_timer_update += emulation_target_time_per_timer_update;
-            self.machine.DT -|= 1;
-            self.machine.ST -|= 1;
-        }
-
-        const target_time_per_cpu_instruction = ONE_SECOND / chip8_specs.target_cpu_frequency;
-        const emulation_target_time_per_cpu_instruction = 100 * target_time_per_cpu_instruction / self.emulation_speed;
-
-        if (time - self.time_since_last_cpu_instruction >= emulation_target_time_per_cpu_instruction) {
-            self.time_since_last_cpu_instruction += emulation_target_time_per_cpu_instruction;
+        if (ticks_since_last_cpu_instruction >= self.ticks_per_cpu_instruction) {
+            self.time_since_last_cpu_instruction += self.tick_duration * self.ticks_per_cpu_instruction;
+            self.ticks_since_last_timer_update += self.ticks_per_cpu_instruction;
             self.machine.step_through();
             return true;
         } else {
             return false;
         }
     }
+
+    fn update_timers(self: *Debugger) void {
+        self.ticks_since_last_timer_update = 0;
+        self.machine.DT -|= 1;
+        self.machine.ST -|= 1;
+    }
+
+    pub fn step(self: *Debugger) void {
+        self.ticks_since_last_timer_update += self.ticks_per_cpu_instruction;
+
+        if (self.ticks_since_last_timer_update >= self.ticks_per_timer_update) {
+            update_timers(self);
+        }
+
+        self.machine.step_through();
+    }
+
+    // Forces the emulator to advance one tick forward
+    // pub fn step(self: *Debugger, time: time_t) void {
+    // }
 
     pub fn load_ROM(self: *Debugger, io: std.Io, path: []const u8) DebuggerError!void {
         self.machine.ram = @splat(0);

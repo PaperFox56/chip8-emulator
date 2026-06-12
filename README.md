@@ -14,10 +14,11 @@ The GUI of the debugger uses [raylib](https://github.com/raysan5/raylib) and [ra
 - Ablity to load ROM files form disk
 
 ## In planning
- - Implement scrolling inside the disassembly panel
- - Memory panel allowing to see and manipulate the machine's RAM
- - State saving and loading
- - Rewinding to a previous state (not to sure about that one but I'll try)
+- add breakpoints
+- Implement scrolling inside the disassembly panel
+- Memory panel allowing to see and manipulate the machine's RAM
+- State saving and loading
+- Rewinding to a previous state (not to sure about that one but I'll try)
 
 # Keymap
 
